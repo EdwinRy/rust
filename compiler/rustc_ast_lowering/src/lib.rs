@@ -913,45 +913,7 @@ impl<'a, 'hir> LoweringContext<'a, 'hir> {
                     .0
                 }
                 GenericArgs::Parenthesized(ref data) => {
-                    let mut err = self.sess.struct_span_err(
-                        gen_args.span(),
-                        "parenthesized generic arguments cannot be used in associated type constraints"
-                    );
-                    if let Ok(snippet) = self.sess.source_map().span_to_snippet(data.span) {
-                        // Suggest replacing parentheses with angle brackets `Trait(params...)` to `Trait<params...>`
-                        if !data.inputs.is_empty() {
-                            // Suggest replacing `(` and `)` with `<` and `>`
-                            // The snippet may be missing the closing `)`, skip that case
-                            if snippet.ends_with(')') {
-                                if let Some(split) = snippet.find('(') {
-                                    let trait_name = &snippet[0..split];
-                                    let args = &snippet[split + 1..snippet.len() - 1];
-                                    err.span_suggestion(
-                                        data.span,
-                                        "use angle brackets instead",
-                                        format!("{}<{}>", trait_name, args),
-                                        Applicability::MaybeIncorrect,
-                                    );
-                                }
-                            }
-                        }
-                        // Suggest removing empty parentheses: "Trait()" -> "Trait"
-                        else {
-                            // The snippet may be missing the closing `)`, skip that case
-                            if snippet.ends_with(')') {
-                                if let Some(split) = snippet.find('(') {
-                                    let trait_name = &snippet[0..split];
-                                    err.span_suggestion(
-                                        data.span,
-                                        "remove parentheses",
-                                        format!("{}", trait_name),
-                                        Applicability::MaybeIncorrect,
-                                    );
-                                }
-                            }
-                        }
-                    };
-                    err.emit();
+                    self.assoc_ty_contraint_param_error_emit(gen_args, data);
                     self.lower_angle_bracketed_parameter_data(
                         &data.as_angle_bracketed_args(),
                         ParamMode::Explicit,
@@ -1063,6 +1025,41 @@ impl<'a, 'hir> LoweringContext<'a, 'hir> {
             kind,
             span: self.lower_span(constraint.span),
         }
+    }
+
+    fn assoc_ty_contraint_param_error_emit(&self, gen_args: &GenericArgs, data: &ParenthesizedArgs) -> () {
+        let mut err = self.sess.struct_span_err(
+            gen_args.span(),
+            "parenthesized generic arguments cannot be used in associated type constraints"
+        );
+        if let Ok(snippet) = self.sess.source_map().span_to_snippet(data.span) 
+            // Skip snippet with missing `)`
+            && snippet.ends_with(')') 
+            && let Some(split) = snippet.find("(") {
+
+                let trait_name = &snippet[0..split];
+
+                // Suggest removing empty parentheses: "Trait()" -> "Trait"
+                if data.inputs.is_empty() {
+                    err.span_suggestion(
+                        data.span,
+                        "remove parentheses",
+                        format!("{}", trait_name),
+                        Applicability::MaybeIncorrect,
+                    );
+                }
+                // Suggest replacing parentheses with angle brackets `Trait(params...)` to `Trait<params...>`
+                else {
+                    let args = &snippet[split + 1..snippet.len() - 1];
+                    err.span_suggestion(
+                        data.span,
+                        "use angle brackets instead",
+                        format!("{}<{}>", trait_name, args),
+                        Applicability::MaybeIncorrect,
+                    );
+                }
+        };
+        err.emit();
     }
 
     fn lower_generic_arg(
