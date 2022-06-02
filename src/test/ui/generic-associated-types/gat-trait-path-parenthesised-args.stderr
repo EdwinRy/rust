@@ -8,7 +8,7 @@ error: parenthesized generic arguments cannot be used in associated type constra
   --> $DIR/gat-trait-path-parenthesised-args.rs:7:27
    |
 LL | fn foo<'a>(arg: Box<dyn X<Y('a) = &'a ()>>) {}
-   |                           ^^^^^
+   |                           ^^^^^ help: use angle brackets instead: `Y<'a>`
 
 error[E0107]: this associated type takes 1 lifetime argument but 0 lifetime arguments were supplied
   --> $DIR/gat-trait-path-parenthesised-args.rs:7:27

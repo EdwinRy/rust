@@ -46,7 +46,7 @@ use rustc_data_structures::fx::{FxHashMap, FxHashSet};
 use rustc_data_structures::sorted_map::SortedMap;
 use rustc_data_structures::stable_hasher::{HashStable, StableHasher};
 use rustc_data_structures::sync::Lrc;
-use rustc_errors::struct_span_err;
+use rustc_errors::{struct_span_err, Applicability};
 use rustc_hir as hir;
 use rustc_hir::def::{DefKind, Namespace, PartialRes, PerNS, Res};
 use rustc_hir::def_id::{DefId, DefPathHash, LocalDefId, CRATE_DEF_ID};
@@ -901,7 +901,6 @@ impl<'a, 'hir> LoweringContext<'a, 'hir> {
         mut itctx: ImplTraitContext<'_, 'hir>,
     ) -> hir::TypeBinding<'hir> {
         debug!("lower_assoc_ty_constraint(constraint={:?}, itctx={:?})", constraint, itctx);
-
         // lower generic arguments of identifier in constraint
         let gen_args = if let Some(ref gen_args) = constraint.gen_args {
             let gen_args_ctor = match gen_args {
@@ -918,7 +917,40 @@ impl<'a, 'hir> LoweringContext<'a, 'hir> {
                         gen_args.span(),
                         "parenthesized generic arguments cannot be used in associated type constraints"
                     );
-                    // FIXME: try to write a suggestion here
+                    if let Ok(snippet) = self.sess.source_map().span_to_snippet(data.span) {
+                        // Suggest replacing parentheses with angle brackets `Trait(params...)` to `Trait<params...>`
+                        if !data.inputs.is_empty() {
+                            // Suggest replacing `(` and `)` with `<` and `>`
+                            // The snippet may be missing the closing `)`, skip that case
+                            if snippet.ends_with(')') {
+                                if let Some(split) = snippet.find('(') {
+                                    let trait_name = &snippet[0..split];
+                                    let args = &snippet[split + 1..snippet.len() - 1];
+                                    err.span_suggestion(
+                                        data.span,
+                                        "use angle brackets instead",
+                                        format!("{}<{}>", trait_name, args),
+                                        Applicability::MaybeIncorrect,
+                                    );
+                                }
+                            }
+                        }
+                        // Suggest removing empty parentheses: "Trait()" -> "Trait"
+                        else {
+                            // The snippet may be missing the closing `)`, skip that case
+                            if snippet.ends_with(')') {
+                                if let Some(split) = snippet.find('(') {
+                                    let trait_name = &snippet[0..split];
+                                    err.span_suggestion(
+                                        data.span,
+                                        "remove parentheses",
+                                        format!("{}", trait_name),
+                                        Applicability::MaybeIncorrect,
+                                    );
+                                }
+                            }
+                        }
+                    };
                     err.emit();
                     self.lower_angle_bracketed_parameter_data(
                         &data.as_angle_bracketed_args(),
