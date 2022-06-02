@@ -1027,14 +1027,18 @@ impl<'a, 'hir> LoweringContext<'a, 'hir> {
         }
     }
 
-    fn assoc_ty_contraint_param_error_emit(&self, gen_args: &GenericArgs, data: &ParenthesizedArgs) -> () {
+    fn assoc_ty_contraint_param_error_emit(
+        &self,
+        gen_args: &GenericArgs,
+        data: &ParenthesizedArgs,
+    ) -> () {
         let mut err = self.sess.struct_span_err(
             gen_args.span(),
-            "parenthesized generic arguments cannot be used in associated type constraints"
+            "parenthesized generic arguments cannot be used in associated type constraints",
         );
-        if let Ok(snippet) = self.sess.source_map().span_to_snippet(data.span) 
+        if let Ok(snippet) = self.sess.source_map().span_to_snippet(data.span)
             // Skip snippet with missing `)`
-            && snippet.ends_with(')') 
+            && snippet.ends_with(')')
             && let Some(split) = snippet.find("(") {
 
                 let trait_name = &snippet[0..split];
